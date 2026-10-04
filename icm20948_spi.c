@@ -18,7 +18,7 @@ icm20948_status_e icm20948_internal_write_spi(uint8_t reg, uint8_t *data, uint32
         .tx_buffer = tx_buffer,
         .length = length*8
     };
-    if (spi_device_polling_transmit((spi_device_handle_t *)handle, &trans_desc) != ESP_OK)
+    if (spi_device_polling_transmit((spi_device_handle_t)handle, &trans_desc) != ESP_OK)
     {
         return ICM_20948_STAT_ERR;
     }
@@ -42,7 +42,7 @@ icm20948_status_e icm20948_internal_read_spi(uint8_t reg, uint8_t *buff, uint32_
 			.rx_buffer = rx_buffer,
             .length = length*8
     };
-    if (spi_device_polling_transmit((spi_device_handle_t *)handle, &trans_desc) != ESP_OK)
+    if (spi_device_polling_transmit((spi_device_handle_t)handle, &trans_desc) != ESP_OK)
     {
         return ICM_20948_STAT_ERR;
     }

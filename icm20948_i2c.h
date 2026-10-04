@@ -1,12 +1,14 @@
 #ifndef _ICM_20948_I2C_H_
 #define _ICM_20948_I2C_H_
 
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
 
 typedef struct
 {
-	i2c_port_t i2c_port;
-	uint8_t i2c_addr;
+ i2c_port_num_t i2c_port;
+ uint8_t i2c_addr;
+ i2c_master_bus_handle_t bus_handle;
+ i2c_master_dev_handle_t dev_handle;
 } icm0948_config_i2c_t;
 
 
