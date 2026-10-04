@@ -90,9 +90,9 @@ TEST_CASE("ICM-20948 SPI configures accelerometer and gyroscope", "[icm20948][sp
 {
     const icm20948_internal_sensor_id_bm sensors =
         ICM_20948_INTERNAL_ACC | ICM_20948_INTERNAL_GYR;
+    const icm20948_smplrt_t sample_rate = {.a = 19, .g = 19};
     const icm20948_fss_t full_scale = {.a = GPM_4, .g = DPS_500};
     const icm20948_dlpcfg_t dlpf = {.a = ACC_D246BW_N265BW, .g = GYR_D119BW5_B154BW3};
-    const icm20948_smplrt_t sample_rate = {.a = 19, .g = 19};
 
     initialize_spi_testbed();
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_sample_mode(&icm, sensors, SAMPLE_MODE_CONTINUOUS));
@@ -124,25 +124,35 @@ TEST_CASE("ICM-20948 SPI reads aggregate sensor data", "[icm20948][spi]")
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_get_agmt(&icm, &agmt));
 }
 
-TEST_CASE("ICM-20948 SPI configures and reads the integrated magnetometer", "[icm20948][spi][mag]")
+TEST_CASE("ICM-20948 SPI DMP produces a 9-axis quaternion", "[icm20948][spi][dmp]")
 {
-    icm20948_agmt_t agmt = {0};
-    bool data_ready = false;
+    icm_20948_DMP_data_t data = {0};
+    bool quaternion_received = false;
 
     initialize_spi_testbed();
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_sw_reset(&icm));
+    vTaskDelay(pdMS_TO_TICKS(250));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_sleep(&icm, false));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_low_power(&icm, false));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_init_dmp_sensor_with_defaults(&icm));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
-                          icm20948_configure_magnetometer(&icm, AK09916_MODE_CONT_100_HZ));
+                          inv_icm20948_enable_dmp_sensor(&icm, INV_ICM20948_SENSOR_ORIENTATION, 1));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
+                          inv_icm20948_set_dmp_sensor_period(&icm, DMP_ODR_Reg_Quat9, 0));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_fifo(&icm, true));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_dmp(&icm, true));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_reset_dmp(&icm));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_reset_fifo(&icm));
 
-    for (int attempt = 0; attempt < 20; ++attempt) {
-        vTaskDelay(pdMS_TO_TICKS(20));
-        TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_get_agmt(&icm, &agmt));
-        if (agmt.magStat1 & 0x01) {
-            data_ready = true;
+    for (int attempt = 0; attempt < 300; ++attempt) {
+        const icm20948_status_e status = inv_icm20948_read_dmp_data(&icm, &data);
+        if ((status == ICM_20948_STAT_OK || status == ICM_20948_STAT_FIFO_MORE_DATA_AVAIL) &&
+            (data.header & DMP_header_bitmap_Quat9)) {
+            quaternion_received = true;
             break;
         }
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    TEST_ASSERT_TRUE(data_ready);
-    TEST_ASSERT_EQUAL_UINT8(0, agmt.magStat2 & 0x08);
-    TEST_ASSERT_TRUE(agmt.mag.axes.x != 0 || agmt.mag.axes.y != 0 || agmt.mag.axes.z != 0);
+    TEST_ASSERT_TRUE(quaternion_received);
 }
