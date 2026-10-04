@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        idf_ver: ["release-v5.2"]
+        idf_ver: ["release-v5.2", "release-v6.1"]
         idf_target: ["esp32s3"]
         example_project: ["i2c_agmt", "spi_agmt", "i2c_dmp_quat9_orientation", "spi_dmp_quat9_orientation"]
     steps:
