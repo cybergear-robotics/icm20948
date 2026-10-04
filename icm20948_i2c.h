@@ -3,6 +3,10 @@
 
 #include "driver/i2c_master.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct
 {
     /* Create and configure the bus/device with the ESP-IDF API before init. */
@@ -15,5 +19,9 @@ void icm20948_init_i2c(icm20948_device_t *device, icm0948_config_i2c_t *config);
 /* these functions are exposed in order to make a custom setup of a serif_t possible */
 icm20948_status_e icm20948_internal_write_i2c(uint8_t reg, uint8_t *data, uint32_t len, void *user);
 icm20948_status_e icm20948_internal_read_i2c(uint8_t reg, uint8_t *buff, uint32_t len, void *user);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

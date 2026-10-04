@@ -11,6 +11,10 @@
 #include "ak09916_enumerations.h"
 #include "icm20948_dmp.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern int memcmp(const void *, const void *, size_t); // Avoid compiler warnings
 
 // There are two versions of the InvenSense DMP firmware for the ICM20948 - with slightly different sizes
@@ -286,5 +290,9 @@ extern int memcmp(const void *, const void *, size_t); // Avoid compiler warning
 
 
   icm20948_status_e icm20948_init_dmp_sensor_with_defaults(icm20948_device_t *pdev);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _ICM_20948_C_H_ */
