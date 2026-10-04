@@ -5,6 +5,7 @@
 
 #include "icm20948.h"
 #include "icm20948_spi.h"
+#include "ak09916_enumerations.h"
 
 static const spi_bus_config_t bus_config = {
     .miso_io_num = CONFIG_ICM20948_SPI_MISO_GPIO,
@@ -53,6 +54,8 @@ TEST_CASE("ICM-20948 initializes driver state and rejects invalid parameters", "
                           icm20948_set_sample_mode(&icm, ICM_20948_INTERNAL_MAG, SAMPLE_MODE_CONTINUOUS));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_SENSOR_NOT_SUPPORTED,
                           icm20948_enable_dlpf(&icm, ICM_20948_INTERNAL_MAG, true));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_PARAM_ERR,
+                          icm20948_configure_magnetometer(&icm, AK09916_MODE_SINGLE));
 }
 
 TEST_CASE("ICM-20948 SPI reads the expected WHO_AM_I value", "[icm20948][spi]")
@@ -119,4 +122,27 @@ TEST_CASE("ICM-20948 SPI reads aggregate sensor data", "[icm20948][spi]")
     initialize_spi_testbed();
     vTaskDelay(pdMS_TO_TICKS(50));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_get_agmt(&icm, &agmt));
+}
+
+TEST_CASE("ICM-20948 SPI configures and reads the integrated magnetometer", "[icm20948][spi][mag]")
+{
+    icm20948_agmt_t agmt = {0};
+    bool data_ready = false;
+
+    initialize_spi_testbed();
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
+                          icm20948_configure_magnetometer(&icm, AK09916_MODE_CONT_100_HZ));
+
+    for (int attempt = 0; attempt < 20; ++attempt) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+        TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_get_agmt(&icm, &agmt));
+        if (agmt.magStat1 & 0x01) {
+            data_ready = true;
+            break;
+        }
+    }
+
+    TEST_ASSERT_TRUE(data_ready);
+    TEST_ASSERT_EQUAL_UINT8(0, agmt.magStat2 & 0x08);
+    TEST_ASSERT_TRUE(agmt.mag.axes.x != 0 || agmt.mag.axes.y != 0 || agmt.mag.axes.z != 0);
 }

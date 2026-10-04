@@ -101,6 +101,10 @@ void app_main(void)
 	/* Now wake the sensor up */
 	icm20948_sleep(&icm, false);
 	icm20948_low_power(&icm, false);
+	if (icm20948_configure_magnetometer(&icm, AK09916_MODE_CONT_100_HZ) != ICM_20948_STAT_OK) {
+		ESP_LOGE(TAG, "magnetometer configuration failed");
+		return;
+	}
 
     /* loop */
     while(1)

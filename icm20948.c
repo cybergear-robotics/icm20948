@@ -1051,6 +1051,32 @@ icm20948_status_e icm20948_i2c_controller_configure_peripheral(icm20948_device_t
   return retval;
 }
 
+icm20948_status_e icm20948_configure_magnetometer(icm20948_device_t *pdev, ak09916_mode_e mode)
+{
+  if (mode != AK09916_MODE_CONT_10_HZ && mode != AK09916_MODE_CONT_20_HZ &&
+      mode != AK09916_MODE_CONT_50_HZ && mode != AK09916_MODE_CONT_100_HZ)
+  {
+    return ICM_20948_STAT_PARAM_ERR;
+  }
+
+  uint8_t mode_register = mode;
+  icm20948_status_e retval = icm20948_i2c_master_enable(pdev, true);
+  if (retval != ICM_20948_STAT_OK)
+  {
+    return retval;
+  }
+
+  retval = icm20948_i2c_master_single_w(pdev, MAG_AK09916_I2C_ADDR, AK09916_REG_CNTL2, &mode_register);
+  if (retval != ICM_20948_STAT_OK)
+  {
+    return retval;
+  }
+
+  return icm20948_i2c_controller_configure_peripheral(pdev, 0, MAG_AK09916_I2C_ADDR,
+                                                        AK09916_REG_ST1, 9, true, true,
+                                                        false, false, false, 0);
+}
+
 // Higher Level
 icm20948_status_e icm20948_get_agmt(icm20948_device_t *pdev, icm20948_agmt_t *pagmt)
 {
@@ -2632,5 +2658,3 @@ icm20948_status_e inv_icm20948_set_gyro_sf(icm20948_device_t *pdev, unsigned cha
 
   return result;
 }
-
-

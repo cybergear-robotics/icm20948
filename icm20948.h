@@ -215,8 +215,10 @@ extern int memcmp(const void *, const void *, size_t); // Avoid compiler warning
   icm20948_status_e icm20948_enable_dlpf(icm20948_device_t *pdev, icm20948_internal_sensor_id_bm sensors, bool enable);
   icm20948_status_e icm20948_set_sample_rate(icm20948_device_t *pdev, icm20948_internal_sensor_id_bm sensors, icm20948_smplrt_t smplrt);
 
-  // Interface Things
-  icm20948_status_e icm20948_i2c_master_passthrough(icm20948_device_t *pdev, bool passthrough);
+   // Interface Things
+   /** @brief Configure the integrated AK09916 for continuous measurements. */
+   icm20948_status_e icm20948_configure_magnetometer(icm20948_device_t *pdev, ak09916_mode_e mode);
+   icm20948_status_e icm20948_i2c_master_passthrough(icm20948_device_t *pdev, bool passthrough);
   icm20948_status_e icm20948_i2c_master_enable(icm20948_device_t *pdev, bool enable);
   icm20948_status_e icm20948_i2c_master_reset(icm20948_device_t *pdev);
   icm20948_status_e icm20948_i2c_controller_configure_peripheral(icm20948_device_t *pdev, uint8_t peripheral, uint8_t addr, uint8_t reg, uint8_t len, bool Rw, bool enable, bool data_only, bool grp, bool swap, uint8_t dataOut);
