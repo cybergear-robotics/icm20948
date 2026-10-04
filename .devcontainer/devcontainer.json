@@ -1,0 +1,11 @@
+{
+  "name": "ESP-IDF v6.1",
+  "image": "espressif/idf:v6.1",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "espressif.esp-idf-extension"
+      ]
+    }
+  }
+}
