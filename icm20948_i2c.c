@@ -9,7 +9,7 @@ icm20948_status_e icm20948_internal_write_i2c(uint8_t reg, uint8_t *data, uint32
 {
 	icm20948_status_e status = ICM_20948_STAT_OK;
 	icm0948_config_i2c_t *args = (icm0948_config_i2c_t*)user;
-    if (args == NULL || args->dev_handle == NULL) {
+    if (args == NULL || args->dev_handle == NULL || (len > 0 && data == NULL)) {
         return ICM_20948_STAT_ERR;
     }
 
@@ -30,7 +30,7 @@ icm20948_status_e icm20948_internal_read_i2c(uint8_t reg, uint8_t *buff, uint32_
 {
 	icm20948_status_e status = ICM_20948_STAT_OK;
 	icm0948_config_i2c_t *args = (icm0948_config_i2c_t*)user;
-    if (args == NULL || args->dev_handle == NULL) {
+    if (args == NULL || args->dev_handle == NULL || (len > 0 && buff == NULL)) {
         return ICM_20948_STAT_ERR;
     }
     if (i2c_master_transmit_receive(args->dev_handle, &reg, 1, buff, len, 100) != ESP_OK)

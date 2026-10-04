@@ -5,10 +5,8 @@
 
 typedef struct
 {
- i2c_port_num_t i2c_port;
- uint8_t i2c_addr;
- i2c_master_bus_handle_t bus_handle;
- i2c_master_dev_handle_t dev_handle;
+    /* Create and configure the bus/device with the ESP-IDF API before init. */
+    i2c_master_dev_handle_t dev_handle;
 } icm0948_config_i2c_t;
 
 
