@@ -12,6 +12,10 @@ icm20948_status_e icm20948_init_dmp_sensor_with_defaults(icm20948_device_t *pdev
     // sequence from InvenSense's _confidential_ Application Note "Programming Sequence for DMP Hardware Functions".
     icm20948_status_e  result = ICM_20948_STAT_OK; // Use result and worst_result to show if the configuration was successful
 
+    // The AK09916 is connected through the ICM-20948 auxiliary I2C master.
+    result = icm20948_i2c_master_enable(pdev, true);
+    if (result > worst_result) worst_result = result;
+
     // Normally, when the DMP is not enabled, startupMagnetometer (called by startupDefault, which is called by begin) configures the AK09916 magnetometer
     // to run at 100Hz by setting the CNTL2 register (0x31) to 0x08. Then the ICM20948's I2C_SLV0 is configured to read
     // nine bytes from the mag every sample, starting from the STATUS1 register (0x10). ST1 includes the DRDY (Data Ready) bit.
