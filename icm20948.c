@@ -298,6 +298,9 @@ icm20948_status_e icm20948_sw_reset(icm20948_device_t *pdev)
   {
     return retval;
   }
+  pdev->_last_bank = 0;
+  pdev->_last_mems_bank = 255;
+  pdev->_firmware_loaded = false;
   return retval;
 }
 
@@ -1518,20 +1521,19 @@ icm20948_status_e inv_icm20948_write_mems(icm20948_device_t *pdev, unsigned shor
     return result;
   }
 
-  lBankSelected = (reg >> 8);
-
-  if (lBankSelected != pdev->_last_mems_bank)
-  {
-    pdev->_last_mems_bank = lBankSelected;
-    result = icm20948_execute_w(pdev, AGB0_REG_MEM_BANK_SEL, &lBankSelected, 1);
-    if (result != ICM_20948_STAT_OK)
-    {
-      return result;
-    }
-  }
-
   while (bytesWritten < length)
   {
+    lBankSelected = (reg >> 8);
+    if (lBankSelected != pdev->_last_mems_bank)
+    {
+      pdev->_last_mems_bank = lBankSelected;
+      result = icm20948_execute_w(pdev, AGB0_REG_MEM_BANK_SEL, &lBankSelected, 1);
+      if (result != ICM_20948_STAT_OK)
+      {
+        return result;
+      }
+    }
+
     lStartAddrSelected = (reg & 0xff);
 
     /* Sets the starting read or write address for the selected memory, inside of the selected page (see MEM_SEL Register).
@@ -1545,10 +1547,11 @@ icm20948_status_e inv_icm20948_write_mems(icm20948_device_t *pdev, unsigned shor
       return result;
     }
 
-    if (length - bytesWritten <= INV_MAX_SERIAL_WRITE)
-      thisLen = length - bytesWritten;
-    else
+    thisLen = length - bytesWritten;
+    if (thisLen > INV_MAX_SERIAL_WRITE)
       thisLen = INV_MAX_SERIAL_WRITE;
+    if (thisLen > DMP_MEM_BANK_SIZE - lStartAddrSelected)
+      thisLen = DMP_MEM_BANK_SIZE - lStartAddrSelected;
 
     /* Write data */
 
@@ -1591,20 +1594,19 @@ icm20948_status_e inv_icm20948_read_mems(icm20948_device_t *pdev, unsigned short
     return result;
   }
 
-  lBankSelected = (reg >> 8);
-
-  if (lBankSelected != pdev->_last_mems_bank)
-  {
-    pdev->_last_mems_bank = lBankSelected;
-    result = icm20948_execute_w(pdev, AGB0_REG_MEM_BANK_SEL, &lBankSelected, 1);
-    if (result != ICM_20948_STAT_OK)
-    {
-      return result;
-    }
-  }
-
   while (bytesRead < length)
   {
+    lBankSelected = (reg >> 8);
+    if (lBankSelected != pdev->_last_mems_bank)
+    {
+      pdev->_last_mems_bank = lBankSelected;
+      result = icm20948_execute_w(pdev, AGB0_REG_MEM_BANK_SEL, &lBankSelected, 1);
+      if (result != ICM_20948_STAT_OK)
+      {
+        return result;
+      }
+    }
+
     lStartAddrSelected = (reg & 0xff);
 
     /* Sets the starting read or write address for the selected memory, inside of the selected page (see MEM_SEL Register).
@@ -1618,10 +1620,11 @@ icm20948_status_e inv_icm20948_read_mems(icm20948_device_t *pdev, unsigned short
       return result;
     }
 
-    if (length - bytesRead <= INV_MAX_SERIAL_READ)
-      thisLen = length - bytesRead;
-    else
+    thisLen = length - bytesRead;
+    if (thisLen > INV_MAX_SERIAL_READ)
       thisLen = INV_MAX_SERIAL_READ;
+    if (thisLen > DMP_MEM_BANK_SIZE - lStartAddrSelected)
+      thisLen = DMP_MEM_BANK_SIZE - lStartAddrSelected;
 
     /* Read data */
 
