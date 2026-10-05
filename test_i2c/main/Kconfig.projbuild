@@ -1,0 +1,33 @@
+menu "ICM-20948 I2C Test Configuration"
+
+    config ICM20948_I2C_SCL_GPIO
+        int "I2C SCL GPIO number"
+        default 3
+        help
+            GPIO connected to the ICM-20948 I2C clock line.
+
+    config ICM20948_I2C_SDA_GPIO
+        int "I2C SDA GPIO number"
+        default 9
+        help
+            GPIO connected to the ICM-20948 I2C data line.
+
+    config ICM20948_I2C_CS_GPIO
+        int "SPI CS GPIO number"
+        default 18
+        help
+            ICM-20948 chip-select GPIO, driven high while testing I2C.
+
+    config ICM20948_I2C_AD0_GPIO
+        int "I2C AD0 GPIO number"
+        default 5
+        help
+            ICM-20948 AD0/SDO GPIO, driven high to select address 0x69.
+
+    config ICM20948_I2C_ADDRESS
+        hex "I2C device address"
+        default 0x69
+        help
+            ICM-20948 I2C address selected by the AD0 pin.
+
+endmenu
