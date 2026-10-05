@@ -64,13 +64,14 @@ void app_main(void)
 	/* check whoami */
 	icm20948_status_e stat = ICM_20948_STAT_ERR;
 	uint8_t whoami = 0x00;
-	while ((stat != ICM_20948_STAT_OK) || (whoami != ICM_20948_WHOAMI))
-	{
+	do {
 		whoami = 0x00;
 		stat = icm20948_get_who_am_i(&icm, &whoami);
-		ESP_LOGE(TAG, "whoami does not match (0x %d). Halting...", whoami);
-		vTaskDelay(1000 / portTICK_PERIOD_MS);
-	}
+		if ((stat != ICM_20948_STAT_OK) || (whoami != ICM_20948_WHOAMI)) {
+			ESP_LOGE(TAG, "whoami does not match (0x%02X). Retrying...", whoami);
+			vTaskDelay(pdMS_TO_TICKS(1000));
+		}
+	} while ((stat != ICM_20948_STAT_OK) || (whoami != ICM_20948_WHOAMI));
 
 	/* Here we are doing a SW reset to make sure the device starts in a known state */
 	icm20948_sw_reset(&icm);
