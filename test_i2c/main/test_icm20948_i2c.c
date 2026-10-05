@@ -45,6 +45,14 @@ static void initialize_int1_gpio(void)
     }
 }
 
+static void clear_int_queue(void)
+{
+    gpio_num_t interrupt_gpio;
+
+    while (xQueueReceive(int_queue, &interrupt_gpio, 0) == pdTRUE) {
+    }
+}
+
 static void initialize_i2c_testbed(void)
 {
     if (initialized) {
@@ -141,9 +149,13 @@ TEST_CASE("ICM-20948 I2C configures accelerometer and gyroscope", "[icm20948][i2
     uint8_t gyro_config;
     uint8_t accel_rate[2];
     uint8_t gyro_rate;
+    uint8_t lp_config;
 
     initialize_i2c_testbed();
     reset_i2c_device();
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_sample_mode(&icm, sensors, SAMPLE_MODE_CYCLED));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB0_REG_LP_CONFIG, &lp_config, 1));
+    TEST_ASSERT_EQUAL_HEX8(0x30, lp_config & 0x30);
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_full_scale(&icm, sensors, full_scale));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_dlpf_cfg(&icm, sensors, dlpf));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_dlpf(&icm, sensors, true));
@@ -160,6 +172,7 @@ TEST_CASE("ICM-20948 I2C configures accelerometer and gyroscope", "[icm20948][i2
     TEST_ASSERT_EQUAL_UINT8(sample_rate.a >> 8, accel_rate[0] & 0x0F);
     TEST_ASSERT_EQUAL_UINT8(sample_rate.a & 0xFF, accel_rate[1]);
     TEST_ASSERT_EQUAL_UINT8(sample_rate.g, gyro_rate);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_sample_mode(&icm, sensors, SAMPLE_MODE_CONTINUOUS));
 }
 
 TEST_CASE("ICM-20948 I2C configures interrupts and reports data ready", "[icm20948][i2c]")
@@ -171,6 +184,7 @@ TEST_CASE("ICM-20948 I2C configures interrupts and reports data ready", "[icm209
     initialize_i2c_testbed();
     reset_i2c_device();
     initialize_int1_gpio();
+    clear_int_queue();
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_int_enable(&icm, &int_enable, &int_read));
     TEST_ASSERT_EQUAL_UINT8(1, int_read.RAW_DATA_0_RDY_EN);
     TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(int_queue, &interrupt_gpio, pdMS_TO_TICKS(1000)));
@@ -290,8 +304,7 @@ TEST_CASE("ICM-20948 I2C reports DMP FIFO data through INT1", "[icm20948][i2c][d
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
                           inv_icm20948_set_dmp_sensor_period(&icm, DMP_ODR_Reg_Gyro, 0));
     initialize_int1_gpio();
-    while (xQueueReceive(int_queue, &interrupt_gpio, 0) == pdTRUE) {
-    }
+    clear_int_queue();
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_int_enable(&icm, &int_enable, NULL));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_fifo(&icm, true));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_dmp(&icm, true));

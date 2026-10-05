@@ -62,6 +62,14 @@ static void initialize_int1_gpio(void)
     }
 }
 
+static void clear_int_queue(void)
+{
+    gpio_num_t interrupt_gpio;
+
+    while (xQueueReceive(int_queue, &interrupt_gpio, 0) == pdTRUE) {
+    }
+}
+
 static void initialize_spi_testbed(void)
 {
     if (initialized) {
@@ -179,7 +187,7 @@ TEST_CASE("ICM-20948 SPI configures interrupts and reports data ready", "[icm209
     icm20948_int_pin_cfg_t pin_config = {
         .INT_ANYRD_2CLEAR = 1,
         .INT1_LATCH_EN = 1,
-        .INT1_ACTL = 1,
+        .INT1_ACTL = 0,
     };
     icm20948_int_enable_t int_enable = {
         .DMP_INT1_EN = 1,
@@ -198,6 +206,7 @@ TEST_CASE("ICM-20948 SPI configures interrupts and reports data ready", "[icm209
     TEST_ASSERT_EQUAL_UINT8(pin_config.INT_ANYRD_2CLEAR, pin_read.INT_ANYRD_2CLEAR);
     TEST_ASSERT_EQUAL_UINT8(pin_config.INT1_LATCH_EN, pin_read.INT1_LATCH_EN);
     TEST_ASSERT_EQUAL_UINT8(pin_config.INT1_ACTL, pin_read.INT1_ACTL);
+    clear_int_queue();
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_int_enable(&icm, &int_enable, &int_read));
     TEST_ASSERT_EQUAL_UINT8(int_enable.DMP_INT1_EN, int_read.DMP_INT1_EN);
     TEST_ASSERT_EQUAL_UINT8(int_enable.RAW_DATA_0_RDY_EN, int_read.RAW_DATA_0_RDY_EN);
@@ -315,8 +324,7 @@ TEST_CASE("ICM-20948 SPI reports DMP FIFO data through INT1", "[icm20948][spi][d
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
                            inv_icm20948_set_dmp_sensor_period(&icm, DMP_ODR_Reg_Gyro, 0));
     initialize_int1_gpio();
-    while (xQueueReceive(int_queue, &interrupt_gpio, 0) == pdTRUE) {
-    }
+    clear_int_queue();
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_int_enable(&icm, &int_enable, NULL));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_fifo(&icm, true));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_dmp(&icm, true));
