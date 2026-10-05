@@ -7,6 +7,7 @@
 
 #include "icm20948.h"
 #include "icm20948_i2c.h"
+#include "ak09916_registers.h"
 
 static icm20948_device_t icm;
 static icm0948_config_i2c_t icm_config;
@@ -122,9 +123,16 @@ TEST_CASE("ICM-20948 I2C initializes driver state and rejects invalid parameters
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_SENSOR_NOT_SUPPORTED,
                           icm20948_set_sample_mode(&icm, ICM_20948_INTERNAL_MAG, SAMPLE_MODE_CONTINUOUS));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_SENSOR_NOT_SUPPORTED,
-                          icm20948_enable_dlpf(&icm, ICM_20948_INTERNAL_MAG, true));
+                           icm20948_enable_dlpf(&icm, ICM_20948_INTERNAL_MAG, true));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_SENSOR_NOT_SUPPORTED,
+                          icm20948_set_full_scale(&icm, ICM_20948_INTERNAL_MAG, (icm20948_fss_t){0}));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_SENSOR_NOT_SUPPORTED,
+                          icm20948_set_sample_rate(&icm, ICM_20948_INTERNAL_MAG, (icm20948_smplrt_t){0}));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_PARAM_ERR,
-                          icm20948_configure_magnetometer(&icm, AK09916_MODE_SINGLE));
+                           icm20948_configure_magnetometer(&icm, AK09916_MODE_SINGLE));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_PARAM_ERR,
+                          icm20948_i2c_controller_configure_peripheral(&icm, 4, 0, 0, 0, false, false,
+                                                                          false, false, false, 0));
 }
 
 TEST_CASE("ICM-20948 I2C reset restores communication", "[icm20948][i2c]")
@@ -154,6 +162,7 @@ TEST_CASE("ICM-20948 I2C configures accelerometer and gyroscope", "[icm20948][i2
     initialize_i2c_testbed();
     reset_i2c_device();
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_sample_mode(&icm, sensors, SAMPLE_MODE_CYCLED));
+    // Read LP_CONFIG directly to verify the ACCEL_CYCLE and GYRO_CYCLE bits written by the API.
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB0_REG_LP_CONFIG, &lp_config, 1));
     TEST_ASSERT_EQUAL_HEX8(0x30, lp_config & 0x30);
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_full_scale(&icm, sensors, full_scale));
@@ -173,6 +182,14 @@ TEST_CASE("ICM-20948 I2C configures accelerometer and gyroscope", "[icm20948][i2
     TEST_ASSERT_EQUAL_UINT8(sample_rate.a & 0xFF, accel_rate[1]);
     TEST_ASSERT_EQUAL_UINT8(sample_rate.g, gyro_rate);
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_sample_mode(&icm, sensors, SAMPLE_MODE_CONTINUOUS));
+    // A direct register read verifies that the disable path cleared both cycle bits.
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB0_REG_LP_CONFIG, &lp_config, 1));
+    TEST_ASSERT_EQUAL_HEX8(0, lp_config & 0x30);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_dlpf(&icm, sensors, false));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB2_REG_ACCEL_CONFIG, &accel_config, 1));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB2_REG_GYRO_CONFIG_1, &gyro_config, 1));
+    TEST_ASSERT_EQUAL_UINT8(0, accel_config & 0x01);
+    TEST_ASSERT_EQUAL_UINT8(0, gyro_config & 0x01);
 }
 
 TEST_CASE("ICM-20948 I2C configures interrupts and reports data ready", "[icm20948][i2c]")
@@ -240,18 +257,100 @@ TEST_CASE("ICM-20948 I2C configures the magnetometer and reads AGMT", "[icm20948
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_get_agmt(&icm, &agmt));
 }
 
-TEST_CASE("ICM-20948 I2C controls and resets FIFO", "[icm20948][i2c]")
+TEST_CASE("ICM-20948 I2C reads raw FIFO data", "[icm20948][i2c][fifo]")
 {
+    uint8_t fifo_en_2 = 0x1F;
+    uint8_t fifo_data[14];
     uint16_t count = 0;
+    uint16_t count_before_read = 0;
 
     initialize_i2c_testbed();
     reset_i2c_device();
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
+                          icm20948_set_sample_mode(&icm, ICM_20948_INTERNAL_ACC | ICM_20948_INTERNAL_GYR,
+                                                    SAMPLE_MODE_CONTINUOUS));
+    // FIFO_EN_2 selects temperature, all gyro axes, and accelerometer for the raw FIFO stream.
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_w(&icm, AGB0_REG_FIFO_EN_2, &fifo_en_2, 1));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_fifo(&icm, true));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_fifo_mode(&icm, false));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_reset_fifo(&icm));
+    for (int attempt = 0; attempt < 50; ++attempt) {
+        TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_get_fifo_count(&icm, &count));
+        if (count >= sizeof(fifo_data)) {
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT16(sizeof(fifo_data), count);
+    // Stop producing samples before comparing the count around the FIFO_R_W read.
+    fifo_en_2 = 0;
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_w(&icm, AGB0_REG_FIFO_EN_2, &fifo_en_2, 1));
+    vTaskDelay(pdMS_TO_TICKS(20));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_get_fifo_count(&icm, &count_before_read));
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT16(sizeof(fifo_data), count_before_read);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_read_fifo(&icm, fifo_data, sizeof(fifo_data)));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_get_fifo_count(&icm, &count));
-    TEST_ASSERT_EQUAL_UINT16(0, count);
+    TEST_ASSERT_EQUAL_UINT16(count_before_read - sizeof(fifo_data), count);
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_fifo(&icm, false));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_reset_fifo(&icm));
+}
+
+TEST_CASE("ICM-20948 I2C controls the auxiliary I2C master", "[icm20948][i2c][aux-i2c]")
+{
+    uint8_t register_value;
+    uint8_t magnetometer_id = 0;
+
+    initialize_i2c_testbed();
+    reset_i2c_device();
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_i2c_master_passthrough(&icm, true));
+    // INT_PIN_CONFIG owns BYPASS_EN; read it directly because passthrough has no readback API.
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB0_REG_INT_PIN_CONFIG, &register_value, 1));
+    TEST_ASSERT_BITS_HIGH(0x02, register_value);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_i2c_master_enable(&icm, true));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
+                          icm20948_i2c_master_single_r(&icm, MAG_AK09916_I2C_ADDR, AK09916_REG_WIA2,
+                                                        &magnetometer_id));
+    TEST_ASSERT_EQUAL_HEX8(0x09, magnetometer_id);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
+                          icm20948_i2c_controller_configure_peripheral(&icm, 0, MAG_AK09916_I2C_ADDR,
+                                                                          AK09916_REG_WIA2, 1, true, true,
+                                                                          false, false, false, 0));
+    // Verify the persistent SLV0 setup: 0x8C is AK09916 address 0x0C with the read bit set.
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB3_REG_I2C_PERIPH0_ADDR, &register_value, 1));
+    TEST_ASSERT_EQUAL_HEX8(0x8C, register_value);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB3_REG_I2C_PERIPH0_CTRL, &register_value, 1));
+    TEST_ASSERT_EQUAL_HEX8(0x81, register_value);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_i2c_master_reset(&icm));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_i2c_master_enable(&icm, false));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB0_REG_USER_CTRL, &register_value, 1));
+    TEST_ASSERT_BITS_LOW(0x20, register_value);
+}
+
+TEST_CASE("ICM-20948 I2C loads DMP firmware and controls DMP state", "[icm20948][i2c][dmp]")
+{
+    uint8_t start_address[2];
+    uint8_t user_ctrl;
+
+    initialize_i2c_testbed();
+    reset_i2c_device();
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_firmware_load(&icm));
+    TEST_ASSERT_TRUE(icm._firmware_loaded);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_dmp_start_address(&icm, 0x1234));
+    // The start address is stored as a big-endian pair in Bank 2 program-start registers.
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
+                          icm20948_execute_r(&icm, AGB2_REG_PRGM_START_ADDRH, start_address, sizeof(start_address)));
+    TEST_ASSERT_EQUAL_HEX8(0x12, start_address[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x34, start_address[1]);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_set_dmp_start_address(&icm, DMP_START_ADDRESS));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_dmp(&icm, true));
+    // USER_CTRL owns DMP_EN; direct reads verify both enable and disable operations.
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB0_REG_USER_CTRL, &user_ctrl, 1));
+    TEST_ASSERT_BITS_HIGH(0x80, user_ctrl);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_dmp(&icm, false));
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_execute_r(&icm, AGB0_REG_USER_CTRL, &user_ctrl, 1));
+    TEST_ASSERT_BITS_LOW(0x80, user_ctrl);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_INVALID_DMP_REGISTER,
+                          inv_icm20948_set_dmp_sensor_period(&icm, (enum DMP_ODR_Registers)-1, 0));
 }
 
 TEST_CASE("ICM-20948 I2C reports DMP FIFO data through INT1", "[icm20948][i2c][dmp]")
@@ -276,6 +375,7 @@ TEST_CASE("ICM-20948 I2C reports DMP FIFO data through INT1", "[icm20948][i2c][d
 
     initialize_i2c_testbed();
     initialize_i2c_dmp();
+    // Preserve the DMP memory contents so this read/write verification leaves the loaded image unchanged.
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
                           inv_icm20948_read_mems(&icm, memory_address, sizeof(original_memory), original_memory));
     memory_status = inv_icm20948_write_mems(&icm, memory_address, sizeof(memory_pattern), memory_pattern);
@@ -291,6 +391,10 @@ TEST_CASE("ICM-20948 I2C reports DMP FIFO data through INT1", "[icm20948][i2c][d
                           inv_icm20948_enable_dmp_sensor(&icm, INV_ICM20948_SENSOR_ORIENTATION, 1));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
                           inv_icm20948_enable_dmp_sensor(&icm, INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR, 1));
+    // DATA_INTR_CTL is DMP memory; the cached value records the exact interrupt mask written there.
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
+                          inv_icm20948_enable_dmp_sensor_int(&icm, INV_ICM20948_SENSOR_ORIENTATION, 1));
+    TEST_ASSERT_BITS_HIGH(DMP_Data_Output_Control_1_Quat9, icm._dataIntrCtl);
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
                           inv_icm20948_enable_dmp_sensor(&icm, INV_ICM20948_SENSOR_RAW_ACCELEROMETER, 1));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
@@ -330,6 +434,7 @@ TEST_CASE("ICM-20948 I2C reports DMP FIFO data through INT1", "[icm20948][i2c][d
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 
+    // Packet arrival is asynchronous, so assert observed DMP headers instead of fixed payload values.
     TEST_ASSERT_TRUE(fifo_data_available);
     TEST_ASSERT_TRUE(quaternion_received);
     TEST_ASSERT_TRUE(quat6_received);
@@ -338,4 +443,7 @@ TEST_CASE("ICM-20948 I2C reports DMP FIFO data through INT1", "[icm20948][i2c][d
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
                           inv_icm20948_enable_dmp_sensor(&icm, INV_ICM20948_SENSOR_RAW_ACCELEROMETER, 0));
     TEST_ASSERT_EQUAL_HEX16(0, icm._dataOutCtl1 & DMP_Data_Output_Control_1_Accel);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
+                          inv_icm20948_enable_dmp_sensor_int(&icm, INV_ICM20948_SENSOR_ORIENTATION, 0));
+    TEST_ASSERT_EQUAL_HEX16(0, icm._dataIntrCtl & DMP_Data_Output_Control_1_Quat9);
 }
