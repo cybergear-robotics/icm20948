@@ -2,7 +2,7 @@ menu "ICM-20948 Settings"
 
     config ICM_20948_USE_DMP
         bool "Enable DMP support"
-        default false
+        default n
         help
             Enabling DMP support will include 14 KiBs of proprietary DMP firmware
  
