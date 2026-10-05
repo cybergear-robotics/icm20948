@@ -30,4 +30,10 @@ menu "ICM-20948 I2C Test Configuration"
         help
             ICM-20948 I2C address selected by the AD0 pin.
 
+    config ICM20948_I2C_INT_GPIO
+        int "INT1 GPIO number"
+        default 4
+        help
+            GPIO connected to the ICM-20948 INT1 output.
+
 endmenu

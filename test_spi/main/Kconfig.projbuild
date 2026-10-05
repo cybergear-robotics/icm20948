@@ -2,26 +2,32 @@ menu "ICM-20948 SPI Test Configuration"
 
     config ICM20948_SPI_MISO_GPIO
         int "MISO GPIO number"
-        default 47
+        default 5
         help
             GPIO connected to the ICM-20948 serial-data-out pin.
 
     config ICM20948_SPI_MOSI_GPIO
         int "MOSI GPIO number"
-        default 21
+        default 9
         help
             GPIO connected to the ICM-20948 serial-data-in pin.
 
     config ICM20948_SPI_SCK_GPIO
         int "SCK GPIO number"
-        default 14
+        default 3
         help
             GPIO connected to the ICM-20948 serial-clock pin.
 
     config ICM20948_SPI_CS_GPIO
         int "CS GPIO number"
-        default 13
+        default 18
         help
             GPIO connected to the ICM-20948 chip-select pin.
+
+    config ICM20948_SPI_INT_GPIO
+        int "INT1 GPIO number"
+        default 4
+        help
+            GPIO connected to the ICM-20948 INT1 output.
 
 endmenu

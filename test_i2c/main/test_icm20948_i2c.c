@@ -1,4 +1,5 @@
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
@@ -10,6 +11,39 @@
 static icm20948_device_t icm;
 static icm0948_config_i2c_t icm_config;
 static bool initialized;
+static QueueHandle_t int_queue;
+
+static void IRAM_ATTR int1_isr(void *arg)
+{
+    const gpio_num_t gpio_num = (gpio_num_t)arg;
+    BaseType_t higher_priority_task_woken = pdFALSE;
+
+    xQueueSendFromISR(int_queue, &gpio_num, &higher_priority_task_woken);
+    if (higher_priority_task_woken) {
+        portYIELD_FROM_ISR();
+    }
+}
+
+static void initialize_int1_gpio(void)
+{
+    const gpio_config_t config = {
+        .pin_bit_mask = 1ULL << CONFIG_ICM20948_I2C_INT_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type = GPIO_INTR_POSEDGE,
+    };
+
+    TEST_ASSERT_EQUAL(ESP_OK, gpio_config(&config));
+    if (int_queue == NULL) {
+        int_queue = xQueueCreate(4, sizeof(gpio_num_t));
+        TEST_ASSERT_NOT_NULL(int_queue);
+        const esp_err_t result = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+        TEST_ASSERT_TRUE(result == ESP_OK || result == ESP_ERR_INVALID_STATE);
+        TEST_ASSERT_EQUAL(ESP_OK, gpio_isr_handler_add(CONFIG_ICM20948_I2C_INT_GPIO, int1_isr,
+                                                        (void *)CONFIG_ICM20948_I2C_INT_GPIO));
+    }
+}
 
 static void initialize_i2c_testbed(void)
 {
@@ -132,20 +166,16 @@ TEST_CASE("ICM-20948 I2C configures interrupts and reports data ready", "[icm209
 {
     icm20948_int_enable_t int_enable = {.RAW_DATA_0_RDY_EN = 1};
     icm20948_int_enable_t int_read = {0};
-    bool data_ready = false;
+    gpio_num_t interrupt_gpio;
 
     initialize_i2c_testbed();
     reset_i2c_device();
+    initialize_int1_gpio();
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_int_enable(&icm, &int_enable, &int_read));
     TEST_ASSERT_EQUAL_UINT8(1, int_read.RAW_DATA_0_RDY_EN);
-    for (int attempt = 0; attempt < 50; ++attempt) {
-        if (icm20948_data_ready(&icm) == ICM_20948_STAT_OK) {
-            data_ready = true;
-            break;
-        }
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    TEST_ASSERT_TRUE(data_ready);
+    TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(int_queue, &interrupt_gpio, pdMS_TO_TICKS(1000)));
+    TEST_ASSERT_EQUAL(CONFIG_ICM20948_I2C_INT_GPIO, interrupt_gpio);
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_data_ready(&icm));
 }
 
 TEST_CASE("ICM-20948 I2C configures wake-on-motion registers", "[icm20948][i2c][wom]")
@@ -210,7 +240,7 @@ TEST_CASE("ICM-20948 I2C controls and resets FIFO", "[icm20948][i2c]")
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_fifo(&icm, false));
 }
 
-TEST_CASE("ICM-20948 I2C validates DMP memory, FIFO, and sensor streams", "[icm20948][i2c][dmp]")
+TEST_CASE("ICM-20948 I2C reports DMP FIFO data through INT1", "[icm20948][i2c][dmp]")
 {
     const unsigned short memory_address = 0x02F8;
     const unsigned char memory_pattern[] = {
@@ -227,6 +257,8 @@ TEST_CASE("ICM-20948 I2C validates DMP memory, FIFO, and sensor streams", "[icm2
     bool gyro_received = false;
     bool fifo_data_available = false;
     icm20948_status_e memory_status;
+    icm20948_int_enable_t int_enable = {.DMP_INT1_EN = 1};
+    gpio_num_t interrupt_gpio;
 
     initialize_i2c_testbed();
     initialize_i2c_dmp();
@@ -257,10 +289,16 @@ TEST_CASE("ICM-20948 I2C validates DMP memory, FIFO, and sensor streams", "[icm2
                           inv_icm20948_set_dmp_sensor_period(&icm, DMP_ODR_Reg_Accel, 0));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK,
                           inv_icm20948_set_dmp_sensor_period(&icm, DMP_ODR_Reg_Gyro, 0));
+    initialize_int1_gpio();
+    while (xQueueReceive(int_queue, &interrupt_gpio, 0) == pdTRUE) {
+    }
+    TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_int_enable(&icm, &int_enable, NULL));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_fifo(&icm, true));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_enable_dmp(&icm, true));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_reset_dmp(&icm));
     TEST_ASSERT_EQUAL_INT(ICM_20948_STAT_OK, icm20948_reset_fifo(&icm));
+    TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(int_queue, &interrupt_gpio, pdMS_TO_TICKS(1000)));
+    TEST_ASSERT_EQUAL(CONFIG_ICM20948_I2C_INT_GPIO, interrupt_gpio);
 
     for (int attempt = 0; attempt < 300; ++attempt) {
         uint16_t fifo_count = 0;

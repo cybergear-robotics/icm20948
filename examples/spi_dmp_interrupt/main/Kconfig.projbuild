@@ -1,0 +1,25 @@
+menu "ICM-20948 SPI DMP Interrupt Example"
+
+    config ICM20948_SPI_DMP_INT_MISO_GPIO
+        int "MISO GPIO number"
+        default 5
+
+    config ICM20948_SPI_DMP_INT_MOSI_GPIO
+        int "MOSI GPIO number"
+        default 9
+
+    config ICM20948_SPI_DMP_INT_SCK_GPIO
+        int "SCK GPIO number"
+        default 3
+
+    config ICM20948_SPI_DMP_INT_CS_GPIO
+        int "CS GPIO number"
+        default 18
+
+    config ICM20948_SPI_DMP_INT_GPIO
+        int "INT1 GPIO number"
+        default 4
+        help
+            GPIO connected to the ICM-20948 INT1 output.
+
+endmenu
