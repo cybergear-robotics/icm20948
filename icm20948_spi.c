@@ -53,7 +53,7 @@ icm20948_status_e icm20948_internal_read_spi(uint8_t reg, uint8_t *buff, uint32_
 
 /* setup a default SPI-serif for a single-device use. If someone wants to use mutliple ICM-20948, the
    a serif for each device has to be implemented. */
-icm20948_serif_t default_serif = {
+static icm20948_serif_t default_serif = {
     icm20948_internal_write_spi,
     icm20948_internal_read_spi,
     NULL,
@@ -82,5 +82,4 @@ void icm20948_init_spi(icm20948_device_t *icm_device, spi_device_handle_t *handl
     icm_device->_enabled_Android_intr_0 = 0; // Keep track of which Android sensor interrupts are enabled: 0-31
     icm_device->_enabled_Android_intr_1 = 0; // Keep track of which Android sensor interrupts are enabled: 32-
 }
-
 

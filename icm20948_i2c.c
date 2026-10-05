@@ -41,7 +41,7 @@ icm20948_status_e icm20948_internal_read_i2c(uint8_t reg, uint8_t *buff, uint32_
 }
 
 /* default serif */
-icm20948_serif_t default_serif = {
+static icm20948_serif_t default_serif = {
     icm20948_internal_write_i2c,
     icm20948_internal_read_i2c,
     NULL,
