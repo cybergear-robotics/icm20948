@@ -1446,9 +1446,9 @@ icm20948_status_e inv_icm20948_firmware_load(icm20948_device_t *pdev, const unsi
   }
 
   //Enable LP_EN since we disabled it at begining of this function.
-  result = icm20948_low_power(pdev, true); // Put chip into low power state
-  if (result != ICM_20948_STAT_OK)
-    return result;
+  const icm20948_status_e low_power_result = icm20948_low_power(pdev, true); // Put chip into low power state
+  if (low_power_result != ICM_20948_STAT_OK)
+    return low_power_result;
 
   if (!flag)
   {
@@ -1750,9 +1750,9 @@ icm20948_status_e inv_icm20948_set_dmp_sensor_period(icm20948_device_t *pdev, en
     break;
   }
 
-  result = icm20948_low_power(pdev, true); // Put chip into low power state
-  if (result != ICM_20948_STAT_OK)
-    return result;
+  const icm20948_status_e low_power_result = icm20948_low_power(pdev, true); // Put chip into low power state
+  if (low_power_result != ICM_20948_STAT_OK)
+    return low_power_result;
 
   if (result2 > result)
     result = result2; // Return the highest error
