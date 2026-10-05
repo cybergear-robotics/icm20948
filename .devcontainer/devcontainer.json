@@ -1,8 +1,23 @@
 {
   "name": "ESP-IDF v6.1",
   "image": "espressif/idf:v6.1",
+  "runArgs": [
+    "--device=/dev/ttyACM0"
+  ],
   "customizations": {
     "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "ESP-IDF",
+        "terminal.integrated.profiles.linux": {
+          "ESP-IDF": {
+            "path": "/bin/bash",
+            "args": [
+              "-c",
+              ". /opt/esp/idf/export.sh && exec /bin/bash -i"
+            ]
+          }
+        }
+      },
       "extensions": [
         "espressif.esp-idf-extension"
       ]
