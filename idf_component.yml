@@ -16,7 +16,15 @@ dependencies:
 
 files:
   exclude:
+    - ".devcontainer/"
+    - ".devcontainer/**/*"
+    - ".github/"
+    - ".github/**/*"
     - "datasheet/"
     - "datasheet/**/*"
     - "docs/"
     - "docs/**/*"
+    - "test_i2c/"
+    - "test_i2c/**/*"
+    - "test_spi/"
+    - "test_spi/**/*"
