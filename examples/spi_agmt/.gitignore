@@ -1,3 +1,5 @@
-build
-sdkconfig
-sdkconfig.old
+/build/
+/managed_components/
+/sdkconfig
+/sdkconfig.old
+/dependencies.lock
